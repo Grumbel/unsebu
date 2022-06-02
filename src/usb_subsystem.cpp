@@ -39,7 +39,7 @@ USBSubsystem::USBSubsystem() :
     throw std::runtime_error(os.str());
   }
 
-  m_usb_gsource.reset(new USBGSource);
+  m_usb_gsource = std::make_unique<USBGSource>();
   m_usb_gsource->attach(NULL);
 }
 

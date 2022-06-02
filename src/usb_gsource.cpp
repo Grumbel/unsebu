@@ -48,7 +48,10 @@ USBGSource::USBGSource() :
   m_source = reinterpret_cast<GUSBSource*>(g_source_new(&m_source_funcs, sizeof(GUSBSource)));
   m_source->usb_source = this;
   g_source_set_callback(&m_source->source,
-                        &USBGSource::on_source_wrap, this,
+                        [](void* userdata) -> gboolean {
+                          return static_cast<USBGSource*>(userdata)->on_source();
+                        },
+                        this,
                         NULL);
 
   // add pollfds to source
@@ -61,8 +64,12 @@ USBGSource::USBGSource() :
 
   // register pollfd callbacks
   libusb_set_pollfd_notifiers(NULL,
-                              &USBGSource::on_usb_pollfd_added_wrap,
-                              &USBGSource::on_usb_pollfd_removed_wrap,
+                              [](int fd, short events, void* userdata) {
+                                static_cast<USBGSource*>(userdata)->on_usb_pollfd_added(fd, events);
+                              },
+                              [](int fd,  void* userdata) {
+                                static_cast<USBGSource*>(userdata)->on_usb_pollfd_removed(fd);
+                              },
                               this);
 }
 
@@ -85,36 +92,29 @@ USBGSource::attach(GMainContext* context)
 void
 USBGSource::on_usb_pollfd_added(int fd, short events)
 {
-  GPollFD* gfd = new GPollFD;
+  auto gfd = std::make_unique<GPollFD>();
 
   gfd->fd = fd;
   gfd->events  = events;
   gfd->revents = 0;
 
-  g_source_add_poll(&m_source->source, gfd);
+  g_source_add_poll(&m_source->source, gfd.get());
 
-  m_pollfds.push_back(gfd);
+  m_pollfds.push_back(std::move(gfd));
 }
 
 void
 USBGSource::on_usb_pollfd_removed(int fd)
 {
-  // find the GPollFD that matched the given \a fd
-  std::list<GPollFD*>::iterator it = m_pollfds.end();
-  for(std::list<GPollFD*>::iterator i = m_pollfds.begin(); i != m_pollfds.end(); ++i)
-  {
-    if ((*i)->fd == fd)
-    {
-      it = i;
-      break;
-    }
-  }
+  auto it = std::find_if(m_pollfds.begin(), m_pollfds.end(), [fd](std::unique_ptr<GPollFD> const& el){
+    return el->fd == fd;
+  });
 
   assert(it != m_pollfds.end());
 
   // FIXME: here is a bug
-  g_source_remove_poll(&m_source->source, *it);
-  delete *it;
+  g_source_remove_poll(&m_source->source, it->get());
+
   m_pollfds.erase(it);
 }
 
@@ -122,19 +122,19 @@ gboolean
 USBGSource::on_source_prepare(GSource* source, gint* timeout)
 {
   struct timeval tv;
-  int ret = libusb_get_next_timeout(NULL, &tv);
+  int err = libusb_get_next_timeout(NULL, &tv);
 
-  if (ret == 0) // no timeouts
+  if (err == 0) // no timeouts
   {
     *timeout = -1;
   }
-  else if (ret == 1) // timeout was returned
+  else if (err == 1) // timeout was returned
   {
     *timeout = static_cast<gint>((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
   }
   else
   {
-    log_error("libusb_get_next_timeout() failed: {}", libusb_strerror(ret));
+    log_error("libusb_get_next_timeout() failed: {}", libusb_strerror(err));
     *timeout = -1;
   }
 
@@ -147,7 +147,7 @@ USBGSource::on_source_check(GSource* source)
 {
   USBGSource* usb_source = reinterpret_cast<GUSBSource*>(source)->usb_source;
   //log_debug("Number of PollFD: " << usb_source->m_pollfds.size());
-  for(std::list<GPollFD*>::iterator i = usb_source->m_pollfds.begin(); i != usb_source->m_pollfds.end(); ++i)
+  for(auto i = usb_source->m_pollfds.begin(); i != usb_source->m_pollfds.end(); ++i)
   {
     if (false)
     {

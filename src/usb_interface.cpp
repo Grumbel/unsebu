@@ -26,13 +26,13 @@
 
 namespace unsebu {
 
-struct USBReadCallback
+struct USBReadData
 {
   USBInterface* iface;
   std::function<bool (uint8_t*, int)> callback;
 };
 
-struct USBWriteCallback
+struct USBWriteData
 {
   USBInterface* iface;
   std::function<bool (libusb_transfer*)> callback;
@@ -43,29 +43,29 @@ USBInterface::USBInterface(libusb_device_handle* handle, int interface, bool try
   m_interface(interface),
   m_endpoints()
 {
-  int ret = libusb_claim_interface(handle, m_interface);
-  if (ret == LIBUSB_SUCCESS)
+  int err = libusb_claim_interface(handle, m_interface);
+  if (err == LIBUSB_SUCCESS)
   {
     // success
   }
-  else if (ret == LIBUSB_ERROR_BUSY && try_detach)
+  else if (err == LIBUSB_ERROR_BUSY && try_detach)
   {
     // try to detach and then try to reopen
-    ret = libusb_detach_kernel_driver(handle, interface);
-    if (ret != LIBUSB_SUCCESS)
+    err = libusb_detach_kernel_driver(handle, interface);
+    if (err != LIBUSB_SUCCESS)
     {
       std::ostringstream os;
-      os << "error detaching kernel driver: " << interface << ": " << libusb_strerror(ret);
+      os << "error detaching kernel driver: " << interface << ": " << libusb_strerror(err);
       throw std::runtime_error(os.str());
     }
     else
     {
       // kernel driver detached, try to claim it again
-      ret = libusb_claim_interface(handle, interface);
-      if (ret != LIBUSB_SUCCESS)
+      err = libusb_claim_interface(handle, interface);
+      if (err != LIBUSB_SUCCESS)
       {
         std::ostringstream os;
-        os << "error claiming interface: " << interface << ": " << libusb_strerror(ret);
+        os << "error claiming interface: " << interface << ": " << libusb_strerror(err);
         throw std::runtime_error(os.str());
       }
     }
@@ -73,7 +73,7 @@ USBInterface::USBInterface(libusb_device_handle* handle, int interface, bool try
   else
   {
     std::ostringstream os;
-    os << "error claiming interface: " << interface << ": " << libusb_strerror(ret);
+    os << "error claiming interface: " << interface << ": " << libusb_strerror(err);
     throw std::runtime_error(os.str());
   }
 }
@@ -81,7 +81,7 @@ USBInterface::USBInterface(libusb_device_handle* handle, int interface, bool try
 USBInterface::~USBInterface()
 {
   // cancel all transfer that might still be running
-  for(Endpoints::iterator it = m_endpoints.begin(); it != m_endpoints.end(); ++it)
+  for(auto it = m_endpoints.begin(); it != m_endpoints.end(); ++it)
   {
     if (it->second)
     {
@@ -96,9 +96,10 @@ USBInterface::~USBInterface()
 
 void
 USBInterface::submit_read(int endpoint, int len,
-                          const std::function<bool (uint8_t*, int)>& callback)
+                          std::function<bool (uint8_t*, int)> const& callback)
 {
   assert(m_endpoints.find(endpoint) == m_endpoints.end());
+
   libusb_transfer* transfer = libusb_alloc_transfer(0);
   transfer->flags |= LIBUSB_TRANSFER_FREE_BUFFER;
 
@@ -107,16 +108,20 @@ USBInterface::submit_read(int endpoint, int len,
   libusb_fill_interrupt_transfer(transfer, m_handle,
                                  static_cast<unsigned char>(endpoint | LIBUSB_ENDPOINT_IN),
                                  data, len,
-                                 &USBInterface::on_read_data_wrap,
-                                 new USBReadCallback{this, callback},
+                                 [](libusb_transfer* transfer_) {
+                                   static_cast<USBReadData*>(transfer_->user_data)->iface->on_read_data(
+                                     static_cast<USBReadData*>(transfer_->user_data), transfer_);
+                                 },
+                                 new USBReadData{this, callback},
                                  0); // timeout
-  int ret;
-  ret = libusb_submit_transfer(transfer);
-  if (ret != LIBUSB_SUCCESS)
+
+  int err = libusb_submit_transfer(transfer);
+  if (err != LIBUSB_SUCCESS)
   {
     libusb_free_transfer(transfer);
+
     std::ostringstream os;
-    os << "libusb_submit_transfer(): " << libusb_strerror(ret);
+    os << "libusb_submit_transfer(): " << libusb_strerror(err);
     throw std::runtime_error(os.str());
   }
   else
@@ -128,7 +133,7 @@ USBInterface::submit_read(int endpoint, int len,
 
 void
 USBInterface::submit_write(int endpoint, uint8_t* data_in, int len,
-                           const std::function<bool (libusb_transfer*)>& callback)
+                           std::function<bool (libusb_transfer*)> const& callback)
 {
   libusb_transfer* transfer = libusb_alloc_transfer(0);
   transfer->flags |= LIBUSB_TRANSFER_FREE_BUFFER;
@@ -140,17 +145,19 @@ USBInterface::submit_write(int endpoint, uint8_t* data_in, int len,
   libusb_fill_interrupt_transfer(transfer, m_handle,
                                  static_cast<unsigned char>(endpoint | LIBUSB_ENDPOINT_OUT),
                                  data, len,
-                                 &USBInterface::on_write_data_wrap,
-                                 new USBWriteCallback{this, callback},
+                                 [](libusb_transfer* xfer) {
+                                   static_cast<USBWriteData*>(xfer->user_data)->iface->on_write_data(
+                                     static_cast<USBWriteData*>(xfer->user_data), xfer);
+                                 },
+                                 new USBWriteData{this, callback},
                                  0); // timeout
 
-  int ret;
-  ret = libusb_submit_transfer(transfer);
-  if (ret != LIBUSB_SUCCESS)
+  int err = libusb_submit_transfer(transfer);
+  if (err != LIBUSB_SUCCESS)
   {
     libusb_free_transfer(transfer);
     std::ostringstream os;
-    os << "libusb_submit_transfer(): " << libusb_strerror(ret);
+    os << "libusb_submit_transfer(): " << libusb_strerror(err);
     throw std::runtime_error(os.str());
   }
   else
@@ -162,7 +169,7 @@ USBInterface::submit_write(int endpoint, uint8_t* data_in, int len,
 void
 USBInterface::cancel_transfer(int endpoint)
 {
-  Endpoints::iterator it = m_endpoints.find(endpoint);
+  auto const it = m_endpoints.find(endpoint);
   if (it == m_endpoints.end())
   {
     std::ostringstream os;
@@ -190,68 +197,54 @@ USBInterface::cancel_write(int endpoint)
 }
 
 void
-USBInterface::on_read_data(USBReadCallback* callback, libusb_transfer* transfer)
+USBInterface::on_read_data(USBReadData* userdata, libusb_transfer* transfer)
 {
-  if (callback->callback(transfer->buffer, transfer->actual_length))
+  if (userdata->callback(transfer->buffer, transfer->actual_length))
   {
     // callback returned true, thus resend the transfer
-    int ret;
-    ret = libusb_submit_transfer(transfer);
-    if (ret != LIBUSB_SUCCESS)
+    int err;
+    err = libusb_submit_transfer(transfer);
+    if (err != LIBUSB_SUCCESS)
     {
       libusb_free_transfer(transfer);
       std::ostringstream os;
-      os << "libusb_submit_transfer(): " << libusb_strerror(ret);
+      os << "libusb_submit_transfer(): " << libusb_strerror(err);
       throw std::runtime_error(os.str());
     }
   }
   else
   {
     // callback returned false, thus doing cleanup
-    delete callback;
+    delete userdata;
     libusb_free_transfer(transfer);
     m_endpoints.erase(transfer->endpoint);
   }
 }
 
 void
-USBInterface::on_write_data(USBWriteCallback* callback, libusb_transfer* transfer)
+USBInterface::on_write_data(USBWriteData* userdata, libusb_transfer* transfer)
 {
-  if (callback->callback(transfer))
+  if (userdata->callback(transfer))
   {
     // callback returned true, thus resend the transfer (user is free
     // to fill it with new data)
-    int ret;
-    ret = libusb_submit_transfer(transfer);
-    if (ret != LIBUSB_SUCCESS)
+    int err = libusb_submit_transfer(transfer);
+    if (err != LIBUSB_SUCCESS)
     {
       libusb_free_transfer(transfer);
+
       std::ostringstream os;
-      os  << "libusb_submit_transfer(): " << libusb_strerror(ret);
+      os  << "libusb_submit_transfer(): " << libusb_strerror(err);
       throw std::runtime_error(os.str());
     }
   }
   else
   {
     // callback returned false, thus doing cleanup
-    delete callback;
+    delete userdata;
     libusb_free_transfer(transfer);
     m_endpoints.erase(transfer->endpoint);
   }
-}
-
-void
-USBInterface::on_read_data_wrap(libusb_transfer* transfer)
-{
-  USBReadCallback* cb = static_cast<USBReadCallback*>(transfer->user_data);
-  cb->iface->on_read_data(cb, transfer);
-}
-
-void
-USBInterface::on_write_data_wrap(libusb_transfer* transfer)
-{
-  USBWriteCallback* cb = static_cast<USBWriteCallback*>(transfer->user_data);
-  cb->iface->on_write_data(cb, transfer);
 }
 
 } // namespace unsebu

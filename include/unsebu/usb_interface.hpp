@@ -25,17 +25,11 @@
 
 namespace unsebu {
 
-struct USBReadCallback;
-struct USBWriteCallback;
+struct USBReadData;
+struct USBWriteData;
 
 class USBInterface
 {
-private:
-  libusb_device_handle* m_handle;
-  int m_interface;
-  typedef std::map<int, libusb_transfer*> Endpoints;
-  Endpoints m_endpoints;
-
 public:
   USBInterface(libusb_device_handle* handle, int interface, bool try_detach = false);
   ~USBInterface();
@@ -54,12 +48,13 @@ public:
 private:
   void cancel_transfer(int endpoint);
 
-  void on_read_data(USBReadCallback* callback, libusb_transfer *transfer);
-  void on_write_data(USBWriteCallback* callback, libusb_transfer *transfer);
+  void on_read_data(USBReadData* callback, libusb_transfer *transfer);
+  void on_write_data(USBWriteData* callback, libusb_transfer *transfer);
 
 private:
-  static void on_read_data_wrap(libusb_transfer *transfer);
-  static void on_write_data_wrap(libusb_transfer *transfer);
+  libusb_device_handle* m_handle;
+  int m_interface;
+  std::map<int, libusb_transfer*> m_endpoints;
 
 private:
   USBInterface(const USBInterface&);

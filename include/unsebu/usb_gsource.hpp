@@ -19,12 +19,14 @@
 #ifndef HEADER_UNSEBU_USB_GSOURCE_HPP
 #define HEADER_UNSEBU_USB_GSOURCE_HPP
 
-#include <glib.h>
 #include <list>
+#include <memory>
+
+#include <glib.h>
+
+#include "fwd.hpp"
 
 namespace unsebu {
-
-class USBGSource;
 
 struct GUSBSource
 {
@@ -34,12 +36,6 @@ struct GUSBSource
 
 class USBGSource
 {
-private:
-  GSourceFuncs m_source_funcs;
-  GUSBSource* m_source;
-  gint m_source_id;
-  std::list<GPollFD*> m_pollfds;
-
 public:
   USBGSource();
   ~USBGSource();
@@ -53,22 +49,16 @@ private:
   void on_usb_pollfd_added(int fd, short events);
   void on_usb_pollfd_removed(int fd);
 
-  static gboolean on_source_wrap(void* userdata) {
-    return static_cast<USBGSource*>(userdata)->on_source();
-  }
-
-  static void on_usb_pollfd_added_wrap(int fd, short events, void* userdata) {
-    static_cast<USBGSource*>(userdata)->on_usb_pollfd_added(fd, events);
-  }
-
-  static void on_usb_pollfd_removed_wrap(int fd,  void* userdata) {
-    static_cast<USBGSource*>(userdata)->on_usb_pollfd_removed(fd);
-  }
-
   // glib callbacks
   static gboolean on_source_prepare(GSource* source, gint* timeout_);
   static gboolean on_source_check(GSource* source);
   static gboolean on_source_dispatch(GSource* source, GSourceFunc callback, gpointer userdata);
+
+private:
+  GSourceFuncs m_source_funcs;
+  GUSBSource* m_source;
+  gint m_source_id;
+  std::list<std::unique_ptr<GPollFD> > m_pollfds;
 
 private:
   USBGSource(const USBGSource&);

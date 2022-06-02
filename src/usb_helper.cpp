@@ -22,38 +22,38 @@ namespace unsebu {
 
 int usb_claim_n_detach_interface(libusb_device_handle* handle, int interface, bool try_detach)
 {
-  int ret = libusb_claim_interface(handle, interface);
+  int err = libusb_claim_interface(handle, interface);
 
-  if (ret == LIBUSB_ERROR_BUSY)
+  if (err == LIBUSB_ERROR_BUSY)
   {
     if (try_detach)
     {
-      ret = libusb_detach_kernel_driver(handle, interface);
-      if (ret == LIBUSB_SUCCESS)
+      err = libusb_detach_kernel_driver(handle, interface);
+      if (err == LIBUSB_SUCCESS)
       {
-        ret = libusb_claim_interface(handle, interface);
-        return ret;
+        err = libusb_claim_interface(handle, interface);
+        return err;
       }
       else
       {
-        return ret;
+        return err;
       }
     }
     else
     {
-      return ret;
+      return err;
     }
   }
   else
   {
     // success or unknown failure
-    return ret;
+    return err;
   }
 }
 
 libusb_device* usb_find_device_by_path(uint8_t busnum, uint8_t devnum)
 {
-  libusb_device* ret_device = nullptr;
+  libusb_device* result = nullptr;
 
   libusb_device** list;
   ssize_t num_devices = libusb_get_device_list(NULL, &list);
@@ -64,14 +64,14 @@ libusb_device* usb_find_device_by_path(uint8_t busnum, uint8_t devnum)
     if (busnum == libusb_get_bus_number(dev) &&
         devnum == libusb_get_device_address(dev))
     {
-      ret_device = dev;
-      libusb_ref_device(ret_device);
+      result = dev;
+      libusb_ref_device(result);
       break;
     }
   }
   libusb_free_device_list(list, 1 /* unref_devices */);
 
-  return ret_device;
+  return result;
 }
 
 } // namespace unsebu

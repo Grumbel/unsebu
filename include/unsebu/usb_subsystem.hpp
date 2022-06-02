@@ -22,19 +22,18 @@
 #include <libusb.h>
 #include <memory>
 
-namespace unsebu {
+#include "fwd.hpp"
 
-class USBGSource;
-class Options;
+namespace unsebu {
 
 class USBSubsystem
 {
-private:
-  std::unique_ptr<USBGSource> m_usb_gsource;
-
 public:
   USBSubsystem();
   ~USBSubsystem();
+
+private:
+  std::unique_ptr<USBGSource> m_usb_gsource;
 
 private:
   USBSubsystem(const USBSubsystem&);
