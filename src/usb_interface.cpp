@@ -20,7 +20,9 @@
 
 #include <assert.h>
 #include <string.h>
-#include <sstream>
+#include <stdexcept>
+
+#include <fmt/format.h>
 
 #include "usb_helper.hpp"
 
@@ -54,9 +56,7 @@ USBInterface::USBInterface(libusb_device_handle* handle, int interface, bool try
     err = libusb_detach_kernel_driver(handle, interface);
     if (err != LIBUSB_SUCCESS)
     {
-      std::ostringstream os;
-      os << "error detaching kernel driver: " << interface << ": " << libusb_strerror(err);
-      throw std::runtime_error(os.str());
+      throw std::runtime_error(fmt::format("error detaching kernel driver: {}: {}", interface, libusb_strerror(err)));
     }
     else
     {
@@ -64,17 +64,13 @@ USBInterface::USBInterface(libusb_device_handle* handle, int interface, bool try
       err = libusb_claim_interface(handle, interface);
       if (err != LIBUSB_SUCCESS)
       {
-        std::ostringstream os;
-        os << "error claiming interface: " << interface << ": " << libusb_strerror(err);
-        throw std::runtime_error(os.str());
+        throw std::runtime_error(fmt::format("error claiming interface: {}: {}", interface, libusb_strerror(err)));
       }
     }
   }
   else
   {
-    std::ostringstream os;
-    os << "error claiming interface: " << interface << ": " << libusb_strerror(err);
-    throw std::runtime_error(os.str());
+    throw std::runtime_error(fmt::format("error claiming interface: {}: {}", interface, libusb_strerror(err)));
   }
 }
 
@@ -120,9 +116,7 @@ USBInterface::submit_read(int endpoint, int len,
   {
     libusb_free_transfer(transfer);
 
-    std::ostringstream os;
-    os << "libusb_submit_transfer(): " << libusb_strerror(err);
-    throw std::runtime_error(os.str());
+    throw std::runtime_error(fmt::format("libusb_submit_transfer(): ", libusb_strerror(err)));
   }
   else
   {
@@ -156,9 +150,8 @@ USBInterface::submit_write(int endpoint, uint8_t* data_in, int len,
   if (err != LIBUSB_SUCCESS)
   {
     libusb_free_transfer(transfer);
-    std::ostringstream os;
-    os << "libusb_submit_transfer(): " << libusb_strerror(err);
-    throw std::runtime_error(os.str());
+
+    throw std::runtime_error(fmt::format("libusb_submit_transfer(): ", libusb_strerror(err)));
   }
   else
   {
@@ -172,9 +165,7 @@ USBInterface::cancel_transfer(int endpoint)
   auto const it = m_endpoints.find(endpoint);
   if (it == m_endpoints.end())
   {
-    std::ostringstream os;
-    os << "endpoint " << (endpoint & LIBUSB_ENDPOINT_ADDRESS_MASK) << "not found";
-    throw std::runtime_error(os.str());
+    throw std::runtime_error(fmt::format("endpoint {} not found", (endpoint & LIBUSB_ENDPOINT_ADDRESS_MASK)));
   }
   else
   {
@@ -207,9 +198,8 @@ USBInterface::on_read_data(USBReadData* userdata, libusb_transfer* transfer)
     if (err != LIBUSB_SUCCESS)
     {
       libusb_free_transfer(transfer);
-      std::ostringstream os;
-      os << "libusb_submit_transfer(): " << libusb_strerror(err);
-      throw std::runtime_error(os.str());
+
+      throw std::runtime_error(fmt::format("libusb_submit_transfer(): {}", libusb_strerror(err)));
     }
   }
   else
@@ -233,9 +223,7 @@ USBInterface::on_write_data(USBWriteData* userdata, libusb_transfer* transfer)
     {
       libusb_free_transfer(transfer);
 
-      std::ostringstream os;
-      os  << "libusb_submit_transfer(): " << libusb_strerror(err);
-      throw std::runtime_error(os.str());
+      throw std::runtime_error(fmt::format("libusb_submit_transfer(): ", libusb_strerror(err)));
     }
   }
   else
