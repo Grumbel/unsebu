@@ -26,19 +26,25 @@
         in
           project_version;
 
-      in rec {
-        packages = flake-utils.lib.flattenTree {
+      in {
+        packages = flake-utils.lib.flattenTree rec {
+          default = unsebu;
+
           unsebu = pkgs.stdenv.mkDerivation {
             pname = "unsebu";
             version = project_version_from_file;
+
             src = nixpkgs.lib.cleanSource ./.;
+
             postPatch = ''
               echo "v${project_version_from_file}" > VERSION
             '';
+
             nativeBuildInputs = with pkgs; [
               cmake
               pkg-config
             ];
+
             buildInputs = with pkgs; [
               pkgs.at-spi2-core
               pkgs.bluez
@@ -64,12 +70,11 @@
               pkgs.xorg.libXdmcp
               pkgs.xorg.libXtst
             ] ++ [
-              tinycmmc.defaultPackage.${system}
-              logmich.defaultPackage.${system}
+              tinycmmc.packages.${system}.default
+              logmich.packages.${system}.default
             ];
           };
         };
-        defaultPackage = packages.unsebu;
       }
     );
 }
