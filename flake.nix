@@ -50,7 +50,7 @@
               pkgs.bluez
               pkgs.dbus-glib
               pkgs.epoxy
-              pkgs.fmt
+              pkgs.fmt_8
               pkgs.glib
               pkgs.gobject-introspection
               pkgs.gtest
