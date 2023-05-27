@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
     flake-utils.url = "github:numtide/flake-utils";
 
     tinycmmc.url = "github:grumbel/tinycmmc";
@@ -9,7 +9,6 @@
 
     logmich.url = "github:logmich/logmich";
     logmich.inputs.nixpkgs.follows = "nixpkgs";
-    logmich.inputs.flake-utils.follows = "flake-utils";
     logmich.inputs.tinycmmc.follows = "tinycmmc";
   };
 
@@ -27,14 +26,14 @@
           project_version;
 
       in {
-        packages = flake-utils.lib.flattenTree rec {
+        packages = rec {
           default = unsebu;
 
           unsebu = pkgs.stdenv.mkDerivation {
             pname = "unsebu";
             version = project_version_from_file;
 
-            src = nixpkgs.lib.cleanSource ./.;
+            src = ./.;
 
             postPatch = ''
               echo "v${project_version_from_file}" > VERSION
@@ -46,29 +45,29 @@
             ];
 
             buildInputs = with pkgs; [
-              pkgs.at-spi2-core
-              pkgs.bluez
-              pkgs.dbus-glib
-              pkgs.epoxy
-              pkgs.fmt_8
-              pkgs.glib
-              pkgs.gobject-introspection
-              pkgs.gtest
-              pkgs.gtk3
-              pkgs.libdatrie
-              pkgs.libselinux
-              pkgs.libsepol
-              pkgs.libthai
-              pkgs.udev
-              pkgs.libusb1
-              pkgs.libxkbcommon
-              pkgs.pcre
-              pkgs.python3
-              pkgs.python3Packages.dbus-python
-              pkgs.util-linux
-              pkgs.xorg.libX11
-              pkgs.xorg.libXdmcp
-              pkgs.xorg.libXtst
+              at-spi2-core
+              bluez
+              dbus-glib
+              epoxy
+              fmt_8
+              glib
+              gobject-introspection
+              gtest
+              gtk3
+              libdatrie
+              libselinux
+              libsepol
+              libthai
+              udev
+              libusb1
+              libxkbcommon
+              pcre
+              python3
+              python3Packages.dbus-python
+              util-linux
+              xorg.libX11
+              xorg.libXdmcp
+              xorg.libXtst
             ] ++ [
               tinycmmc.packages.${system}.default
               logmich.packages.${system}.default
