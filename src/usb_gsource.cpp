@@ -18,6 +18,7 @@
 
 #include "usb_gsource.hpp"
 
+#include <algorithm>
 #include <assert.h>
 #include <poll.h>
 #include <libusb.h>
