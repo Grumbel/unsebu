@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
     tinycmmc.url = "github:grumbel/tinycmmc";
@@ -48,8 +48,7 @@
               at-spi2-core
               bluez
               dbus-glib
-              epoxy
-              fmt_8
+              fmt
               glib
               gobject-introspection
               gtest
